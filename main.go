@@ -47,6 +47,8 @@ var (
 	dbname = "recorder"
 	dbuser = "recorder"
 	dbpass = ""
+
+	show = false
 )
 
 func init() {
@@ -59,6 +61,8 @@ func init() {
 	flag.StringVar(&dbname, "name", dbname, "database name")
 	flag.StringVar(&dbuser, "user", dbuser, "database user")
 	flag.StringVar(&dbpass, "pass", dbpass, "database password")
+
+	flag.BoolVar(&show, "show", show, "just show last 50 requests")
 }
 
 func main() {
@@ -83,7 +87,7 @@ func main() {
 		log.Fatalf("initializing db: %v", err)
 	}
 
-	if false {
+	if show {
 		if lookups, err = getRecentLookups(db, 50); err != nil {
 			log.Fatalf("getting recent events: %v", err)
 		}
@@ -91,6 +95,7 @@ func main() {
 		for _, ll := range lookups {
 			fmt.Printf("%s\n", ll.String())
 		}
+		return
 	}
 
 	if err := processEvents(db); err != nil {
