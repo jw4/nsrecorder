@@ -45,7 +45,7 @@ func listAction(c *cli.Context) error {
 	ctx = context.WithValue(ctx, "channel", c.String("channel"))
 	ctx = context.WithValue(ctx, "lookupd", c.StringSlice("lookupd"))
 
-	w := nsrecorder.NewWatcher(ctx)
+	w := nsrecorder.NewWatcher(ctx, nsrecorder.NewLogStore())
 
 	<-sigChan
 	cancel()

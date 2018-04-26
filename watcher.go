@@ -2,21 +2,27 @@ package nsrecorder // import "jw4.us/nsrecorder"
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
+	"net"
 	"os"
+	"strings"
 	"time"
 
 	nsq "github.com/nsqio/go-nsq"
+	"jw4.us/nspub"
 )
 
-func NewWatcher(ctx context.Context) *Watcher {
-	w := &Watcher{ctx: ctx, msg: make(chan *nsq.Message)}
+func NewWatcher(ctx context.Context, store Store) *Watcher {
+	w := &Watcher{ctx: ctx, store: store, msg: make(chan *nsq.Message)}
 	w.start()
 	return w
 }
 
 type Watcher struct {
 	ctx      context.Context
+	store    Store
 	msg      chan *nsq.Message
 	consumer *nsq.Consumer
 }
@@ -85,12 +91,70 @@ func (w *Watcher) loop() {
 
 func (w *Watcher) handleBatch(messages []*nsq.Message) {
 	fmt.Printf("Processing: %v\n", time.Now())
-	for ix, msg := range messages {
-		fmt.Printf("%d: %x\n", ix, msg)
-		msg.Finish()
+	clients := []Client{}
+	lookups := []Lookup{}
+	for _, msg := range messages {
+		c, l, err := parse(msg)
+		if err != nil {
+			msg.Requeue(-1)
+			continue
+		}
+		clients = append(clients, c)
+		lookups = append(lookups, l)
+	}
+	err := w.store.Accept(clients, lookups)
+	for _, msg := range messages {
+		switch err {
+		case nil:
+			msg.Finish()
+		default:
+			msg.Requeue(-1)
+		}
 	}
 }
 
 func (w *Watcher) log(message *nsq.Message) {
 	w.msg <- message
+}
+
+func parse(rawmsg *nsq.Message) (Client, Lookup, error) {
+	var (
+		client Client
+		lookup Lookup
+		err    error
+
+		hosts, qhosts, aips []string
+	)
+
+	msg := nspub.Message{}
+	if err = json.Unmarshal(rawmsg.Body, &msg); err != nil {
+		log.Printf("unmarshaling nsq message: %v\n%s", err, rawmsg.Body)
+		return client, lookup, err
+	}
+
+	client.IP = msg.ClientIP
+	client.Name = msg.ClientIP
+	if hosts, err = net.LookupAddr(msg.ClientIP); err == nil {
+		client.Name = hosts[0]
+	}
+
+	lookup.When = msg.Time
+	lookup.Client = msg.ClientIP
+	for _, q := range msg.Msg.Question {
+		qhosts = append(qhosts, q.Name)
+	}
+	lookup.Host = strings.Join(qhosts, ",")
+
+	for _, a := range msg.Msg.Answer {
+		if a.A != "" {
+			aips = append(aips, a.A)
+		}
+		if a.AAAA != "" {
+			aips = append(aips, a.AAAA)
+		}
+	}
+	if len(aips) > 0 {
+		lookup.FirstIP = aips[0]
+	}
+	return client, lookup, nil
 }
