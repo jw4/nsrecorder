@@ -50,7 +50,10 @@ func listAction(c *cli.Context) error {
 	ctx = context.WithValue(ctx, "channel", c.String("channel"))
 	ctx = context.WithValue(ctx, "lookupd", c.StringSlice("lookupd"))
 
-	store := nsrecorder.NewSQLiteStore(c.String("db"))
+	store, err := nsrecorder.NewSQLiteStore(c.String("db"))
+	if err != nil {
+		return err
+	}
 	if c.Bool("verbose") {
 		store = nsrecorder.MultiStore(store, nsrecorder.NewLogStore())
 	}

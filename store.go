@@ -57,8 +57,13 @@ func (*logStore) Accept(clients []Client, lookups []Lookup) error {
 	return nil
 }
 
-func NewSQLiteStore(path string) Store {
-	return &sqliteStore{db: path}
+func NewSQLiteStore(path string) (Store, error) {
+	db, err := initializedSqliteConnection(path)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	return &sqliteStore{db: path}, nil
 }
 
 type sqliteStore struct {

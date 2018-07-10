@@ -2,9 +2,10 @@ version: '3.6'
 services:
   nsr:
     build: .
+    image: docker.jw4.us/nsrecorder:latest
+    user: ${UID:-1001}:${GID:-1001}
     cap_drop:
       - ALL
-    image: docker.jw4.us/nsrecorder:latest
     command:
       - list
     environment:
@@ -12,10 +13,10 @@ services:
       - CHANNEL=${CHANNEL:-recorder}
       - LOOKUPD=${LOOKUPD:-"127.0.0.1:4161"}
       - VERBOSE=${VERBOSE:-false}
-      - DB_FILE=/var/lib/nsr.db
+      - DB_FILE=/var/lib/data/nsr.db
     dns:
       - "${DNS1:-8.8.8.8}"
       - "${DNS2:-8.8.4.4}"
     dns_search: ${DNS_SEARCH:-}
     volumes:
-      - ${LOCAL_DB:-./nsr.db}:/var/lib/nsr.db
+      - ${LOCAL_DATA:-./data}:/var/lib/data
