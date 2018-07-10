@@ -1,2 +1,4 @@
 nsrecorder
 nsr
+nsr.db
+.env

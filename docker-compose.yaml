@@ -1,0 +1,21 @@
+version: '3.6'
+services:
+  nsr:
+    build: .
+    cap_drop:
+      - ALL
+    image: docker.jw4.us/nsrecorder:latest
+    command:
+      - list
+    environment:
+      - TOPIC=${TOPIC:-dns}
+      - CHANNEL=${CHANNEL:-recorder}
+      - LOOKUPD=${LOOKUPD:-"127.0.0.1:4161"}
+      - VERBOSE=${VERBOSE:-false}
+      - DB_FILE=/var/lib/nsr.db
+    dns:
+      - "${DNS1:-8.8.8.8}"
+      - "${DNS2:-8.8.4.4}"
+    dns_search: ${DNS_SEARCH:-}
+    volumes:
+      - ${LOCAL_DB:-./nsr.db}:/var/lib/nsr.db

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	nsq "github.com/nsqio/go-nsq"
-	"jw4.us/nspub"
 )
 
 func NewWatcher(ctx context.Context, store Store) *Watcher {
@@ -126,7 +125,7 @@ func parse(rawmsg *nsq.Message) (Client, Lookup, error) {
 		hosts, qhosts, aips []string
 	)
 
-	msg := nspub.Message{}
+	msg := Message{}
 	if err = json.Unmarshal(rawmsg.Body, &msg); err != nil {
 		log.Printf("unmarshaling nsq message: %v\n%s", err, rawmsg.Body)
 		return client, lookup, err

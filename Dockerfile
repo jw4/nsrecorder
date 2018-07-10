@@ -1,7 +1,22 @@
-FROM alpine:latest
+#
+# Build on Debian Stretch
+#
 
-RUN apk --no-cache add bind-tools ca-certificates openssl && update-ca-certificates
+FROM golang:stretch as builder
 
-ADD nsr /nsr
+COPY . /go/src/jw4.us/nsrecorder
+
+WORKDIR /go/src/jw4.us/nsrecorder
+
+RUN go get -v -u ./... && go build -o nsr ./cmd/nsr
+
+
+#
+# Create Image on Stretch Slim
+#
+
+FROM debian:stretch-slim
+
+COPY --from=builder /go/src/jw4.us/nsrecorder/nsr /nsr
 
 ENTRYPOINT ["/nsr"]
