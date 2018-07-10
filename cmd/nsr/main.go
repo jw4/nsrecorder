@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -30,18 +31,18 @@ var (
 	lookupdFlag = cli.StringSliceFlag{Name: "lookupd", EnvVar: "LOOKUPD", Value: &cli.StringSlice{"127.0.0.1:4161"}}
 	dbFlag      = cli.StringFlag{Name: "db", EnvVar: "DB_FILE", Value: "nsr.db"}
 	verboseFlag = cli.BoolFlag{Name: "verbose", EnvVar: "VERBOSE"}
+	listFlags   = []cli.Flag{topicFlag, channelFlag, lookupdFlag, dbFlag, verboseFlag}
 
 	list = cli.Command{
 		Name:   "list",
 		Action: listAction,
-		Flags:  []cli.Flag{topicFlag, channelFlag, lookupdFlag, dbFlag},
+		Flags:  listFlags,
 	}
 )
 
 func listAction(c *cli.Context) error {
-	for _, name := range c.FlagNames() {
-		log.Printf("Flag %q: %t", name, c.IsSet(name))
-	}
+	reportContext(c, listFlags)
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -64,4 +65,24 @@ func listAction(c *cli.Context) error {
 	w.Stop()
 
 	return nil
+}
+
+func reportContext(c *cli.Context, flags []cli.Flag) {
+	log.Printf("Version: %s", nsrecorder.Version)
+	for _, flag := range flags {
+		log.Print(stringFlag(c, flag))
+	}
+}
+
+func stringFlag(c *cli.Context, flag cli.Flag) string {
+	switch v := flag.(type) {
+	case cli.BoolFlag:
+		return fmt.Sprintf("\t%10s: %t", flag.GetName(), c.Bool(flag.GetName()))
+	case cli.StringFlag:
+		return fmt.Sprintf("\t%10s: %s", flag.GetName(), c.String(flag.GetName()))
+	case cli.StringSliceFlag:
+		return fmt.Sprintf("\t%10s: %v", flag.GetName(), c.StringSlice(flag.GetName()))
+	default:
+		return fmt.Sprintf("\t%10s: (%T) %v", flag.GetName(), v, v)
+	}
 }

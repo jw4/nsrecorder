@@ -8,7 +8,11 @@ COPY . /go/src/jw4.us/nsrecorder
 
 WORKDIR /go/src/jw4.us/nsrecorder
 
-RUN go get -v -u ./... && go build -o nsr ./cmd/nsr
+ARG BUILD_VERSION=v0.0.0
+
+ENV BUILD_VERSION ${BUILD_VERSION}
+
+RUN go build -tags netgo -ldflags="-s -w -X jw4.us/nsrecorder.Version=${BUILD_VERSION}" -o nsr ./cmd/nsr/
 
 
 #

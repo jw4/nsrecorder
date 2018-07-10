@@ -12,7 +12,7 @@ clean:
 	go clean ./...
 
 image:
-	docker build -t $(IMAGE):latest -t $(IMAGE):$(BUILD_VERSION) .
+	docker build --build-arg BUILD_VERSION=$(BUILD_VERSION) -t $(IMAGE):latest -t $(IMAGE):$(BUILD_VERSION) .
 
 push: clean image
 	docker push $(IMAGE):$(BUILD_VERSION)

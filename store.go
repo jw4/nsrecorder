@@ -85,8 +85,12 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 	if err != nil {
 		return err
 	}
+	cl2 := map[string]string{}
 	for _, client := range clients {
-		if _, err = stmt.Exec(client.IP, client.Name); err != nil {
+		cl2[client.IP] = client.Name
+	}
+	for ip, name := range cl2 {
+		if _, err = stmt.Exec(ip, name); err != nil {
 			_ = stmt.Close()
 			return err
 		}
@@ -104,7 +108,7 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 		}
 	}
 	_ = stmt.Close()
-	log.Printf("wrote %d clients and %d lookups", len(clients), len(lookups))
+	log.Printf("wrote %d clients and %d lookups", len(cl2), len(lookups))
 	return tx.Commit()
 }
 
