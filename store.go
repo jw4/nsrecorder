@@ -2,7 +2,11 @@ package nsrecorder // import "jw4.us/nsrecorder"
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"log"
+	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -48,31 +52,47 @@ func NewLogStore() Store {
 type logStore struct{}
 
 func (*logStore) Accept(clients []Client, lookups []Lookup) error {
-	log.Printf("ACCEPT %d clients, %d lookups", len(clients), len(lookups))
+	var b strings.Builder
+	fmt.Fprintf(&b, "\nACCEPT %d clients, %d lookups\n", len(clients), len(lookups))
+	clientSet := map[string]string{}
 	for _, client := range clients {
-		log.Printf("\tclient: %+v", client)
+		clientSet[client.IP] = client.Name
 	}
-	for _, lookup := range lookups {
-		log.Printf("\tlookup: %+v", lookup)
+	b.WriteString("clients:\n")
+	cx := 0
+	for k, v := range clientSet {
+		fmt.Fprintf(&b, "%5d %30s %-15s\n", cx, k, v)
+		cx++
 	}
+	b.WriteString("lookups:\n")
+	for x, v := range lookups {
+		fmt.Fprintf(&b, "%5d %30s %s\n", x, clientSet[v.Client], v.Host)
+	}
+	log.Println(b.String())
+
 	return nil
 }
 
-func NewSQLiteStore(path string) (Store, error) {
-	db, err := initializedSqliteConnection(path)
-	if err != nil {
-		return nil, err
+var (
+	ErrInitializationFailed = errors.New("initialization failed")
+
+	dbPatches = []string{
+		"CREATE TABLE IF NOT EXISTS lookups (evt TEXT NOT NULL, clientip TEXT NOT NULL, host TEXT NOT NULL, type TEXT NOT NULL, firstip TEXT, PRIMARY KEY(evt, clientip, host) ON CONFLICT REPLACE)",
+		"CREATE TABLE IF NOT EXISTS clients (ip  TEXT NOT NULL, name     TEXT NOT NULL, PRIMARY KEY(ip, name) ON CONFLICT REPLACE)",
+		"CREATE TABLE IF NOT EXISTS reverse (ip  TEXT NOT NULL, name     TEXT NOT NULL, PRIMARY KEY(ip, name) ON CONFLICT REPLACE)",
 	}
-	defer db.Close()
-	return &sqliteStore{db: path}, nil
-}
+)
+
+func NewSQLiteStore(path string) (Store, error) { return &sqliteStore{db: path}, nil }
 
 type sqliteStore struct {
-	db string
+	db    string
+	once  sync.Once
+	valid bool
 }
 
 func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
-	db, err := initializedSqliteConnection(s.db)
+	db, err := s.conn()
 	if err != nil {
 		return err
 	}
@@ -129,21 +149,25 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 	return tx.Commit()
 }
 
-var tables = []string{
-	"CREATE TABLE IF NOT EXISTS lookups (evt TEXT NOT NULL, clientip TEXT NOT NULL, host TEXT NOT NULL, type TEXT NOT NULL, firstip TEXT, PRIMARY KEY(evt, clientip, host) ON CONFLICT REPLACE)",
-	"CREATE TABLE IF NOT EXISTS clients (ip  TEXT NOT NULL, name     TEXT NOT NULL, PRIMARY KEY(ip, name) ON CONFLICT REPLACE)",
-	"CREATE TABLE IF NOT EXISTS reverse (ip  TEXT NOT NULL, name     TEXT NOT NULL, PRIMARY KEY(ip, name) ON CONFLICT REPLACE)",
-}
-
-func initializedSqliteConnection(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", path)
+func (s *sqliteStore) conn() (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", s.db)
 	if err != nil {
 		return nil, err
 	}
-	for _, stmt := range tables {
-		if _, err = db.Exec(stmt); err != nil {
-			return nil, err
+	s.once.Do(func() { s.initialize(db) })
+	if !s.valid {
+		return nil, ErrInitializationFailed
+	}
+	return db, nil
+}
+
+func (s *sqliteStore) initialize(db *sql.DB) (err error) {
+	for x, dbPatch := range dbPatches {
+		if _, err = db.Exec(dbPatch); err != nil {
+			log.Printf("error applying database patch %d: %v", x, err)
+			return
 		}
 	}
-	return db, err
+	s.valid = true
+	return
 }
