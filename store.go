@@ -73,13 +73,25 @@ func (*logStore) Accept(clients []Client, lookups []Lookup) error {
 	return nil
 }
 
+const (
+	insertClients = "insert clients"
+	insertLookups = "insert lookups"
+	insertReverse = "insert reverse"
+)
+
 var (
 	ErrInitializationFailed = errors.New("initialization failed")
 
 	dbPatches = []string{
-		"CREATE TABLE IF NOT EXISTS lookups (evt TEXT NOT NULL, clientip TEXT NOT NULL, host TEXT NOT NULL, type TEXT NOT NULL, firstip TEXT, PRIMARY KEY(evt, clientip, host) ON CONFLICT REPLACE)",
+		"CREATE TABLE IF NOT EXISTS lookups (evt TEXT NOT NULL, clientip TEXT NOT NULL, host TEXT NOT NULL, PRIMARY KEY(evt, clientip, host) ON CONFLICT REPLACE)",
 		"CREATE TABLE IF NOT EXISTS clients (ip  TEXT NOT NULL, name     TEXT NOT NULL, PRIMARY KEY(ip, name) ON CONFLICT REPLACE)",
 		"CREATE TABLE IF NOT EXISTS reverse (ip  TEXT NOT NULL, name     TEXT NOT NULL, PRIMARY KEY(ip, name) ON CONFLICT REPLACE)",
+	}
+
+	statements = map[string]string{
+		insertClients: "INSERT OR REPLACE INTO clients (ip, name) VALUES (?, ?)",
+		insertLookups: "INSERT OR REPLACE INTO lookups (evt, clientip, host) VALUES (?, ?, ?)",
+		insertReverse: "INSERT OR REPLACE INTO reverse (ip, name) VALUES (?, ?)",
 	}
 )
 
@@ -102,7 +114,7 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 	if err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare("INSERT OR REPLACE INTO clients (ip, name) VALUES (?, ?)")
+	stmt, err := tx.Prepare(statements[insertClients])
 	if err != nil {
 		return err
 	}
@@ -118,18 +130,18 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 	}
 	_ = stmt.Close()
 
-	stmt, err = tx.Prepare("INSERT OR REPLACE INTO lookups (evt, clientip, host, type, firstip) VALUES (?, ?, ?, ?, ?)")
+	stmt, err = tx.Prepare(statements[insertLookups])
 	if err != nil {
 		return err
 	}
-	revStmt, err := tx.Prepare("INSERT OR REPLACE INTO reverse (ip, name) VALUES (?, ?)")
+	revStmt, err := tx.Prepare(statements[insertReverse])
 	if err != nil {
 		return err
 	}
 	ips := 0
 	for _, lookup := range lookups {
 		ips += len(lookup.AllIPs)
-		if _, err = stmt.Exec(lookup.When, lookup.Client, lookup.Host, lookup.Type, lookup.FirstIP); err != nil {
+		if _, err = stmt.Exec(lookup.When, lookup.Client, lookup.Host); err != nil {
 			_ = stmt.Close()
 			_ = revStmt.Close()
 			return err
@@ -145,13 +157,13 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 	_ = stmt.Close()
 	_ = revStmt.Close()
 
-	log.Printf("wrote %d clients, %d reverse ips, and %d lookups", len(cl2), ips, len(lookups))
 	return tx.Commit()
 }
 
 func (s *sqliteStore) conn() (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", s.db)
 	if err != nil {
+		log.Printf("error opening database connection %q: %v", s.db, err)
 		return nil, err
 	}
 	s.once.Do(func() { s.initialize(db) })
