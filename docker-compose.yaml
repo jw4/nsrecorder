@@ -7,7 +7,7 @@ services:
     cap_drop:
       - ALL
     command:
-      - list
+      - watch
     environment:
       - TOPIC=${TOPIC:-dns}
       - CHANNEL=${CHANNEL:-recorder}

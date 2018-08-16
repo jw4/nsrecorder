@@ -17,7 +17,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "nsr"
 	app.Version = nsrecorder.Version
-	app.Commands = []cli.Command{list}
+	app.Commands = []cli.Command{watch}
 	app.Writer = os.Stdout
 	app.ErrWriter = os.Stderr
 	if err := app.Run(os.Args); err != nil {
@@ -31,17 +31,17 @@ var (
 	lookupdFlag = cli.StringSliceFlag{Name: "lookupd", EnvVar: "LOOKUPD", Value: &cli.StringSlice{"127.0.0.1:4161"}}
 	dbFlag      = cli.StringFlag{Name: "db", EnvVar: "DB_FILE", Value: "nsr.db"}
 	verboseFlag = cli.BoolFlag{Name: "verbose", EnvVar: "VERBOSE"}
-	listFlags   = []cli.Flag{topicFlag, channelFlag, lookupdFlag, dbFlag, verboseFlag}
+	watchFlags  = []cli.Flag{topicFlag, channelFlag, lookupdFlag, dbFlag, verboseFlag}
 
-	list = cli.Command{
-		Name:   "list",
-		Action: listAction,
-		Flags:  listFlags,
+	watch = cli.Command{
+		Name:   "watch",
+		Action: watchAction,
+		Flags:  watchFlags,
 	}
 )
 
-func listAction(c *cli.Context) error {
-	reportContext(c, listFlags)
+func watchAction(c *cli.Context) error {
+	reportContext(c, watchFlags)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
