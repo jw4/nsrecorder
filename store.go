@@ -23,6 +23,7 @@ type Lookup struct {
 	Host    string    `json:"host"`
 	Type    string    `json:"type"`
 	FirstIP string    `json:"first_ip"`
+	AllIPs  []string  `json:"all_ips"`
 }
 
 func MultiStore(stores ...Store) Store {
@@ -101,15 +102,37 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 	if err != nil {
 		return err
 	}
+	revStmt, err := tx.Prepare("INSERT OR REPLACE INTO reverse (ip, name) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+	ips := 0
 	for _, lookup := range lookups {
+		ips += len(lookup.AllIPs)
 		if _, err = stmt.Exec(lookup.When, lookup.Client, lookup.Host, lookup.Type, lookup.FirstIP); err != nil {
 			_ = stmt.Close()
+			_ = revStmt.Close()
 			return err
+		}
+		for _, lip := range lookup.AllIPs {
+			if _, err = revStmt.Exec(lip, lookup.Host); err != nil {
+				_ = stmt.Close()
+				_ = revStmt.Close()
+				return err
+			}
 		}
 	}
 	_ = stmt.Close()
-	log.Printf("wrote %d clients and %d lookups", len(cl2), len(lookups))
+	_ = revStmt.Close()
+
+	log.Printf("wrote %d clients, %d reverse ips, and %d lookups", len(cl2), ips, len(lookups))
 	return tx.Commit()
+}
+
+var tables = []string{
+	"CREATE TABLE IF NOT EXISTS lookups (evt TEXT NOT NULL, clientip TEXT NOT NULL, host TEXT NOT NULL, type TEXT NOT NULL, firstip TEXT, PRIMARY KEY(evt, clientip, host) ON CONFLICT REPLACE)",
+	"CREATE TABLE IF NOT EXISTS clients (ip  TEXT NOT NULL, name     TEXT NOT NULL, PRIMARY KEY(ip, name) ON CONFLICT REPLACE)",
+	"CREATE TABLE IF NOT EXISTS reverse (ip  TEXT NOT NULL, name     TEXT NOT NULL, PRIMARY KEY(ip, name) ON CONFLICT REPLACE)",
 }
 
 func initializedSqliteConnection(path string) (*sql.DB, error) {
@@ -117,11 +140,10 @@ func initializedSqliteConnection(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = db.Exec("CREATE TABLE IF NOT EXISTS clients (ip TEXT PRIMARY KEY ON CONFLICT REPLACE, name TEXT NOT NULL ON CONFLICT REPLACE)"); err != nil {
-		return nil, err
-	}
-	if _, err = db.Exec("CREATE TABLE IF NOT EXISTS lookups (evt TEXT NOT NULL, clientip TEXT NOT NULL, host TEXT NOT NULL, type TEXT NOT NULL, firstip TEXT)"); err != nil {
-		return nil, err
+	for _, stmt := range tables {
+		if _, err = db.Exec(stmt); err != nil {
+			return nil, err
+		}
 	}
 	return db, err
 }

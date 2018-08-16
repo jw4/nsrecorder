@@ -95,6 +95,7 @@ func (w *Watcher) handleBatch(messages []*nsq.Message) {
 	for _, msg := range messages {
 		c, l, err := parse(msg)
 		if err != nil {
+			log.Printf("error in parse: %v", err)
 			msg.Requeue(-1)
 			continue
 		}
@@ -107,6 +108,7 @@ func (w *Watcher) handleBatch(messages []*nsq.Message) {
 		case nil:
 			msg.Finish()
 		default:
+			log.Printf("error in store.Accept: %v", err)
 			msg.Requeue(-1)
 		}
 	}
@@ -154,6 +156,8 @@ func parse(rawmsg *nsq.Message) (Client, Lookup, error) {
 	}
 	if len(aips) > 0 {
 		lookup.FirstIP = aips[0]
+		lookup.AllIPs = make([]string, len(aips))
+		copy(lookup.AllIPs, aips)
 	}
 	return client, lookup, nil
 }
