@@ -2,12 +2,13 @@ package nsrecorder // import "jw4.us/nsrecorder"
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -39,7 +40,7 @@ type multiStore []Store
 func (s multiStore) Accept(clients []Client, lookups []Lookup) error {
 	for _, store := range s {
 		if err := store.Accept(clients, lookups); err != nil {
-			return err
+			return errors.Wrap(err, "multi store Accept")
 		}
 	}
 	return nil
@@ -95,7 +96,7 @@ var (
 	}
 )
 
-func NewSQLiteStore(path string) (Store, error) { return &sqliteStore{db: path}, nil }
+func NewSQLiteStore(path string) Store { return &sqliteStore{db: path} }
 
 type sqliteStore struct {
 	db    string
@@ -106,17 +107,17 @@ type sqliteStore struct {
 func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 	db, err := s.conn()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "opening connection to sqlite db")
 	}
 	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "beginning transaction")
 	}
 	stmt, err := tx.Prepare(statements[insertClients])
 	if err != nil {
-		return err
+		return errors.Wrap(err, "preparing insert client statement")
 	}
 	cl2 := map[string]string{}
 	for _, client := range clients {
@@ -125,18 +126,18 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 	for ip, name := range cl2 {
 		if _, err = stmt.Exec(ip, name); err != nil {
 			_ = stmt.Close()
-			return err
+			return errors.Wrap(err, "executing statement")
 		}
 	}
 	_ = stmt.Close()
 
 	stmt, err = tx.Prepare(statements[insertLookups])
 	if err != nil {
-		return err
+		return errors.Wrap(err, "preparing insert lookups statement")
 	}
 	revStmt, err := tx.Prepare(statements[insertReverse])
 	if err != nil {
-		return err
+		return errors.Wrap(err, "preparing insert reverse statement")
 	}
 	ips := 0
 	for _, lookup := range lookups {
@@ -144,13 +145,13 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 		if _, err = stmt.Exec(lookup.When, lookup.Client, lookup.Host); err != nil {
 			_ = stmt.Close()
 			_ = revStmt.Close()
-			return err
+			return errors.Wrap(err, "executing insert lookups")
 		}
 		for _, lip := range lookup.AllIPs {
 			if _, err = revStmt.Exec(lip, lookup.Host); err != nil {
 				_ = stmt.Close()
 				_ = revStmt.Close()
-				return err
+				return errors.Wrap(err, "executing insert reverse")
 			}
 		}
 	}
@@ -164,7 +165,7 @@ func (s *sqliteStore) conn() (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", s.db)
 	if err != nil {
 		log.Printf("error opening database connection %q: %v", s.db, err)
-		return nil, err
+		return nil, errors.Wrap(err, "opening sqlite3 db connection")
 	}
 	s.once.Do(func() { s.initialize(db) })
 	if !s.valid {

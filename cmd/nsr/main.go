@@ -51,10 +51,7 @@ func watchAction(c *cli.Context) error {
 	ctx = context.WithValue(ctx, "channel", c.String("channel"))
 	ctx = context.WithValue(ctx, "lookupd", c.StringSlice("lookupd"))
 
-	store, err := nsrecorder.NewSQLiteStore(c.String("db"))
-	if err != nil {
-		return err
-	}
+	store := nsrecorder.NewSQLiteStore(c.String("db"))
 	if c.Bool("verbose") {
 		store = nsrecorder.MultiStore(store, nsrecorder.NewLogStore())
 	}
