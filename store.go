@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -162,6 +163,7 @@ func (s *sqliteStore) Accept(clients []Client, lookups []Lookup) error {
 }
 
 func (s *sqliteStore) conn() (*sql.DB, error) {
+	s.check()
 	db, err := sql.Open("sqlite3", s.db)
 	if err != nil {
 		log.Printf("error opening database connection %q: %v", s.db, err)
@@ -172,6 +174,12 @@ func (s *sqliteStore) conn() (*sql.DB, error) {
 		return nil, ErrInitializationFailed
 	}
 	return db, nil
+}
+
+func (s *sqliteStore) check() {
+	if _, err := os.Stat(s.db); os.IsNotExist(err) {
+		s.once = sync.Once{}
+	}
 }
 
 func (s *sqliteStore) initialize(db *sql.DB) (err error) {
