@@ -2,7 +2,7 @@ NAME=nsrecorder
 IMAGE=docker.jw4.us/$(NAME)
 
 ifeq ($(BUILD_VERSION),)
-	BUILD_VERSION=$(shell git describe --dirty --first-parent --always --tags)
+	BUILD_VERSION := $(shell git describe --dirty --first-parent --always --tags)
 endif
 
 .PHONY: all
